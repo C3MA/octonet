@@ -7,6 +7,10 @@ tmr.stop(4)
 tmr.stop(5)
 tmr.stop(6)
 
+temperature = 0;
+temperatureTarget=0
+printing = false;
+
 require("tableutil")
 
 local octoprint1 = "10.23.42.33/api/"
@@ -53,14 +57,18 @@ function doRequest(api,callback,delay,post)
             end
             requestRunning=false;
             if(callback ~= nil)then
+                if(code == 204)then
+                    callback(nil)
+                end
                 local success,tableAnswer = pcall(cjson.decode,data);
                 if(success)then
-                    callback(tableAnswer)  
-                end
-            else
-                print("JsonError cannot parse \n" .. data)
-                state = FIND_WLAN
+                    callback(tableAnswer)
+                else
+                    print("JsonError cannot parse \n" .. data)
+                    state = FIND_WLAN
+                end  
             end
+            
         end
         tmr.alarm(6,delay,tmr.ALARM_SINGLE,delayedAnswer)
     end
@@ -79,6 +87,9 @@ end
 function octoPrintReadyCallback(tableAnswer)
     if(tableAnswer.state.flags.ready)then
         state = READY
+        temperature = tableAnswer.temperature.tool0.actual;
+        temperatureTarget = tableAnswer.temperature.tool0.target;
+        printing = tableAnswer.state.flags.printing;
     else
         state = FIND_WLAN
     end
@@ -118,11 +129,60 @@ function dutyCycle()
         for _,row in ipairs(rows) do
             local isPressed = gpio.read(translate[row]);
             if(isPressed == 1)then
+                local request = {}
                 if(row==12 and column==16)then
-                    local request = {}
                     request.command="home"
                     request.axes={"x","y"}
-                    doRequest("printer/printhead",nil,100,request)
+                    doRequest("printer/printhead",nil,5000,request)
+                end
+                if(row==12 and column==2)then
+                    request.command="home"
+                    request.axes={"z"}
+                    doRequest("printer/printhead",nil,5000,request)
+                end
+                if(row==12 and column==14)then
+                    request.command="jog"
+                    request.z=1
+                    doRequest("printer/printhead",nil,150,request)
+                end
+                if(row==12 and column==13)then
+                    request.command="jog"
+                    request.z=-1
+                    doRequest("printer/printhead",nil,150,request)
+                end
+                if(row==4 and column==13)then
+                    request.command="jog"
+                    request.x=15
+                    request.factor=50
+                    doRequest("printer/printhead",nil,50,request)
+                end
+                if(row==5 and column==14)then
+                    request.command="jog"
+                    request.x=-15
+                    request.factor=50
+                    doRequest("printer/printhead",nil,50,request)
+                end
+                if(row==5 and column==2)then
+                    request.command="jog"
+                    request.y=15
+                    request.factor=50
+                    doRequest("printer/printhead",nil,50,request)
+                end
+                if(row==5 and column==13)then
+                    request.command="jog"
+                    request.y=-15
+                    request.factor=50
+                    doRequest("printer/printhead",nil,50,request)
+                end
+                if(row==4 and column==2)then
+                    request.command="extrude"
+                    request.amount=10
+                    doRequest("printer/tool",nil,500,request)
+                end
+                if(row==4 and column==16)then
+                    request.command="extrude"
+                    request.amount=-10
+                    doRequest("printer/tool",nil,500,request)
                 end
                 print(row .. " " .. column .. " pressed " .. isPressed)
             end
@@ -142,7 +202,7 @@ function initSequence()
         print(node.heap())
     end
 
-   
+    
  
     if state ~= READY then
         if(tick)then
@@ -155,8 +215,14 @@ function initSequence()
             ws2812.write(string.char(0,50,0):rep(5))
         else
             dutyCycle()
-            --todo here intelligent state info
-            ws2812.write(string.char(20,0,0):rep(5))
+
+            --todo here intelligent state info  
+            local temp = string.char(221-temperature,temperature,0):rep(2)..string.char(221-temperatureTarget,temperatureTarget,0):rep(2)
+            if(printing and tick)then
+                ws2812.write(temp .. string.char(0,0,255))
+            else
+                ws2812.write(temp .. string.char(0,0,0))
+            end
         end
     end
 end
