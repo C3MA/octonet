@@ -13,7 +13,7 @@ printing = false;
 
 require("tableutil")
 
-local octoprint1 = "10.23.42.33/api/"
+local octoprint1 = "10.23.42.41/api/"
 local octoprint1Key="?apikey=BDF6EAA71A08438EB8CE209F18F448DB"
 
 local selectedOctoPrint = octoprint1;
@@ -177,12 +177,24 @@ function dutyCycle()
                 if(row==4 and column==2)then
                     request.command="extrude"
                     request.amount=10
-                    doRequest("printer/tool",nil,500,request)
+                    doRequest("printer/tool",nil,2000,request)
                 end
                 if(row==4 and column==16)then
                     request.command="extrude"
                     request.amount=-10
-                    doRequest("printer/tool",nil,500,request)
+                    doRequest("printer/tool",nil,2000,request)
+                end
+                if(row==5 and column==16)then
+                    if(printing)then
+                        request.command="pause"
+                        request.amount=-10
+                        doRequest("job",nil,1000,request)
+                    else
+                        request.command="cancel"
+                        request.amount=-10
+                        doRequest("job",nil,1000,request)
+                    end
+                    
                 end
                 print(row .. " " .. column .. " pressed " .. isPressed)
             end
@@ -198,7 +210,7 @@ local tick = false;
 function initSequence()
     tick = not tick
     doWlanStuff()
-    if(node.heap() < 33000)then
+    if(node.heap() < 32000)then
         print(node.heap())
     end
 
@@ -231,5 +243,5 @@ end
 tmr.alarm(0,100,tmr.ALARM_AUTO,initSequence)
 --init web refresh worker
 tmr.alarm(1,2000,tmr.ALARM_AUTO,watchConnection)
--- startSystem
-wifi.sta.config("C3MA","chaosimquadrat",true)
+-- load the wifi configuration
+dofile("wlancfg.lua")
